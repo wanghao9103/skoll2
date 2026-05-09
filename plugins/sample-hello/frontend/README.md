@@ -1,9 +1,12 @@
 # Sample Hello 插件前端说明
 
-当前示例已在主应用静态目录提供远程入口文件：
+插件前端源码统一放在：
+- `plugins/sample-hello/frontend/src/remoteEntry.js`
+
+开发和构建时会自动同步生成：
 - `frontend/public/plugins/sample-hello/remoteEntry.js`
 
-该入口会在主应用的 `RemotePluginPage` 中被动态 import。
+主应用通过该静态入口在 `RemotePluginPage` 中动态 import。
 
 ## 本地演示流程
 

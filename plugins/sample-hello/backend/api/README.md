@@ -1,13 +1,22 @@
-# Sample Hello 插件后端 API 约定
+# Sample Hello 插件后端 API 实现
 
-建议路由前缀：`/api/plugin/sample-hello`
+插件后端路由与接口实现放在插件目录：
+- 路由定义：`plugins/sample-hello/backend/api/routes.yaml`
+- 接口代码：`plugins/sample-hello/backend/api/handlers.js`
 
-## 建议接口
+## 当前路由
 
 - `GET /api/plugin/sample-hello/records`
 - `POST /api/plugin/sample-hello/records`
 - `PUT /api/plugin/sample-hello/records/:id`
 - `DELETE /api/plugin/sample-hello/records/:id`
+
+## 运行时公共库
+
+插件接口代码可以使用基座注入的运行时能力：
+
+- `runtime.db.list/getById/create/updateById/deleteById`
+- `runtime.cache.set/get/del`
 
 ## 说明
 

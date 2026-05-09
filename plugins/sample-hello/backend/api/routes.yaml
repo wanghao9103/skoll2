@@ -1,0 +1,14 @@
+apiPrefix: /plugin/sample-hello
+routes:
+  - method: GET
+    path: /records
+    handler: listRecords
+  - method: POST
+    path: /records
+    handler: createRecord
+  - method: PUT
+    path: /records/:id
+    handler: updateRecord
+  - method: DELETE
+    path: /records/:id
+    handler: deleteRecord
