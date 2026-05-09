@@ -14,3 +14,9 @@ menus:
     path: /plugins/sample-hello
     component: RemotePluginPage
     icon: Grid
+    remoteModule: ./App
+  - name: 示例记录页
+    path: /plugins/sample-hello/records
+    component: RemotePluginPage
+    icon: Tickets
+    remoteModule: ./RecordsPage

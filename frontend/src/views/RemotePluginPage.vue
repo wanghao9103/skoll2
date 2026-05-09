@@ -16,12 +16,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, markRaw, onMounted, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
-const loadedComponent = ref(null)
+const loadedComponent = shallowRef(null)
 
 const pluginKey = computed(() => route.meta.pluginKey || '')
 const frontendEntry = computed(() => route.meta.frontendEntry || '')
@@ -38,12 +38,13 @@ async function loadRemoteComponent() {
     const mod = await import(/* @vite-ignore */ remoteUrl)
 
     if (mod && mod.default) {
-      loadedComponent.value = mod.default
+      loadedComponent.value = markRaw(mod.default)
       return
     }
 
-    if (mod && mod[remoteModule.value]) {
-      loadedComponent.value = mod[remoteModule.value]
+    const namedExport = resolveRemoteExportName(remoteModule.value)
+    if (mod && mod[namedExport]) {
+      loadedComponent.value = markRaw(mod[namedExport])
       return
     }
 
@@ -65,6 +66,14 @@ function resolveRemoteUrl(rawUrl) {
   // In Vite dev mode, importing "/public" assets by bare absolute path
   // is treated as source import and can fail. Use a full URL to force runtime fetch.
   return new URL(rawUrl, window.location.origin).href
+}
+
+function resolveRemoteExportName(rawName) {
+  const value = (rawName || '').trim()
+  if (!value) {
+    return ''
+  }
+  return value.replace(/^\.\//, '')
 }
 
 onMounted(loadRemoteComponent)

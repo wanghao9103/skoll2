@@ -24,8 +24,8 @@ func NewEngine(cfg config.Config, authSvc *service.AuthService, pluginSvc *servi
 		MaxAge:           12 * time.Hour,
 	}))
 
-	sampleHelloSvc := service.NewSampleHelloService(pluginSvc, pluginSvc.Store())
-	h := handler.New(authSvc, pluginSvc, menuSvc, sampleHelloSvc)
+	pluginAPISvc := service.NewPluginAPIService(pluginSvc, pluginSvc.Store())
+	h := handler.New(authSvc, pluginSvc, menuSvc, pluginAPISvc)
 
 	r.GET("/health", h.Health)
 
@@ -37,10 +37,7 @@ func NewEngine(cfg config.Config, authSvc *service.AuthService, pluginSvc *servi
 		protected.Use(middleware.JWT(authSvc))
 		{
 			protected.GET("/menus", h.Menus)
-			protected.GET("/plugin/sample-hello/records", h.ListSampleHelloRecords)
-			protected.POST("/plugin/sample-hello/records", h.CreateSampleHelloRecord)
-			protected.PUT("/plugin/sample-hello/records/:id", h.UpdateSampleHelloRecord)
-			protected.DELETE("/plugin/sample-hello/records/:id", h.DeleteSampleHelloRecord)
+			registerPluginRoutes(protected, h, pluginSvc)
 
 			plugin := protected.Group("/plugin")
 			plugin.Use(middleware.AdminOnly())

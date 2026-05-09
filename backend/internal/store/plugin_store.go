@@ -16,6 +16,10 @@ type PluginStore struct {
 	db *gorm.DB
 }
 
+func (s *PluginStore) DB() *gorm.DB {
+	return s.db
+}
+
 type PluginRecord struct {
 	ID            uint   `gorm:"primaryKey"`
 	PluginKey     string `gorm:"size:120;uniqueIndex;not null"`

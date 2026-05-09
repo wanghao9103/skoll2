@@ -136,21 +136,6 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 		return plugin.Item{}, fmt.Errorf("plugin manifest not found: %s", s.moduleManifestPath(key))
 	}
 
-	if key == "sample-hello" {
-		item.Name = "Sample Hello 插件"
-		item.Description = "示例插件（前端远程页面 + 后端 CRUD + 配置中心）"
-		item.Menus = []plugin.Menu{
-			{
-				Name:         "示例插件",
-				Path:         "/plugins/sample-hello",
-				Component:    "RemotePluginPage",
-				Icon:         "Grid",
-				RemoteModule: "./App",
-			},
-		}
-		item.Permissions = []string{"sample-hello:view", "sample-hello:manage"}
-	}
-
 	s.items[key] = item
 	if err := s.store.UpsertPlugin(item); err != nil {
 		delete(s.items, key)
@@ -357,6 +342,10 @@ func (s *PluginService) Store() *store.PluginStore {
 	return s.store
 }
 
+func (s *PluginService) PluginsDir() string {
+	return s.pluginsDir
+}
+
 func (s *PluginService) loadFromStore() {
 	items, err := s.store.ListPlugins()
 	if err != nil {
@@ -364,6 +353,12 @@ func (s *PluginService) loadFromStore() {
 	}
 
 	for _, item := range items {
+		manifest, loaded, loadErr := s.loadManifest(item.Key)
+		if loadErr == nil && loaded {
+			status := item.Status
+			item = mergeManifest(item, manifest)
+			item.Status = status
+		}
 		s.items[item.Key] = item
 	}
 }

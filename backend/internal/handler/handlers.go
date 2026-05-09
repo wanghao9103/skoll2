@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"skoll2/backend/internal/service"
 
@@ -10,18 +9,18 @@ import (
 )
 
 type Handler struct {
-	authSvc        *service.AuthService
-	pluginSvc      *service.PluginService
-	menuSvc        *service.MenuService
-	sampleHelloSvc *service.SampleHelloService
+	authSvc      *service.AuthService
+	pluginSvc    *service.PluginService
+	menuSvc      *service.MenuService
+	pluginAPISvc *service.PluginAPIService
 }
 
-func New(authSvc *service.AuthService, pluginSvc *service.PluginService, menuSvc *service.MenuService, sampleHelloSvc *service.SampleHelloService) *Handler {
+func New(authSvc *service.AuthService, pluginSvc *service.PluginService, menuSvc *service.MenuService, pluginAPISvc *service.PluginAPIService) *Handler {
 	return &Handler{
-		authSvc:        authSvc,
-		pluginSvc:      pluginSvc,
-		menuSvc:        menuSvc,
-		sampleHelloSvc: sampleHelloSvc,
+		authSvc:      authSvc,
+		pluginSvc:    pluginSvc,
+		menuSvc:      menuSvc,
+		pluginAPISvc: pluginAPISvc,
 	}
 }
 
@@ -166,65 +165,14 @@ func (h *Handler) Menus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": menus})
 }
 
-func (h *Handler) ListSampleHelloRecords(c *gin.Context) {
-	rows, err := h.sampleHelloSvc.ListRecords()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
+func (h *Handler) PluginRouteHandler(pluginKey string, routeHandler string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		data, err := h.pluginAPISvc.Execute(c, pluginKey, routeHandler)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": data})
 	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": rows})
-}
-
-func (h *Handler) CreateSampleHelloRecord(c *gin.Context) {
-	var req service.CreateSampleHelloRecordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-
-	row, err := h.sampleHelloSvc.CreateRecord(req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": row})
-}
-
-func (h *Handler) UpdateSampleHelloRecord(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
-		return
-	}
-
-	var req service.UpdateSampleHelloRecordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-
-	row, err := h.sampleHelloSvc.UpdateRecord(uint(id), req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": row})
-}
-
-func (h *Handler) DeleteSampleHelloRecord(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
-		return
-	}
-
-	if err := h.sampleHelloSvc.DeleteRecord(uint(id)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": gin.H{"id": id}})
 }
