@@ -2,18 +2,42 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"skoll2/backend/internal/plugin"
 	"skoll2/backend/internal/store"
+
+	"gopkg.in/yaml.v3"
 )
 
 type PluginService struct {
-	mu    sync.RWMutex
-	items map[string]plugin.Item
-	store *store.PluginStore
+	mu         sync.RWMutex
+	items      map[string]plugin.Item
+	store      *store.PluginStore
+	pluginsDir string
+}
+
+type pluginModuleManifest struct {
+	Name          string   `yaml:"name"`
+	Key           string   `yaml:"key"`
+	Version       string   `yaml:"version"`
+	Description   string   `yaml:"description"`
+	Icon          string   `yaml:"icon"`
+	APIPrefix     string   `yaml:"apiPrefix"`
+	FrontendEntry string   `yaml:"frontendEntry"`
+	RemoteModule  string   `yaml:"remoteModule"`
+	Permissions   []string `yaml:"permissions"`
+	Menus         []struct {
+		Name         string `yaml:"name"`
+		Path         string `yaml:"path"`
+		Component    string `yaml:"component"`
+		Icon         string `yaml:"icon"`
+		RemoteModule string `yaml:"remoteModule"`
+	} `yaml:"menus"`
 }
 
 type InstallPluginRequest struct {
@@ -42,10 +66,11 @@ type SavePluginConfigRequest struct {
 	Configs   []PluginConfigItem `json:"configs"`
 }
 
-func NewPluginService(pluginStore *store.PluginStore) *PluginService {
+func NewPluginService(pluginStore *store.PluginStore, pluginsDir string) *PluginService {
 	svc := &PluginService{
-		items: map[string]plugin.Item{},
-		store: pluginStore,
+		items:      map[string]plugin.Item{},
+		store:      pluginStore,
+		pluginsDir: pluginsDir,
 	}
 	svc.loadFromStore()
 	return svc
@@ -71,6 +96,7 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 	if key == "" {
 		return plugin.Item{}, errors.New("cannot infer plugin key from packageUrl")
 	}
+	isPluginProtocol := strings.HasPrefix(strings.ToLower(strings.TrimSpace(req.PackageURL)), "plugin://")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -97,6 +123,32 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 			},
 		},
 		Permissions: []string{key + ":view"},
+	}
+
+	manifest, loaded, err := s.loadManifest(key)
+	if err != nil {
+		return plugin.Item{}, err
+	}
+	if loaded {
+		item = mergeManifest(item, manifest)
+	}
+	if isPluginProtocol && !loaded {
+		return plugin.Item{}, fmt.Errorf("plugin manifest not found: %s", s.moduleManifestPath(key))
+	}
+
+	if key == "sample-hello" {
+		item.Name = "Sample Hello 插件"
+		item.Description = "示例插件（前端远程页面 + 后端 CRUD + 配置中心）"
+		item.Menus = []plugin.Menu{
+			{
+				Name:         "示例插件",
+				Path:         "/plugins/sample-hello",
+				Component:    "RemotePluginPage",
+				Icon:         "Grid",
+				RemoteModule: "./App",
+			},
+		}
+		item.Permissions = []string{"sample-hello:view", "sample-hello:manage"}
 	}
 
 	s.items[key] = item
@@ -250,6 +302,16 @@ func (s *PluginService) setState(pluginKey string, status plugin.Status) (plugin
 		return plugin.Item{}, errors.New("plugin not found")
 	}
 
+	if status == plugin.StatusEnabled {
+		manifest, loaded, err := s.loadManifest(pluginKey)
+		if err != nil {
+			return plugin.Item{}, err
+		}
+		if loaded {
+			item = mergeManifest(item, manifest)
+		}
+	}
+
 	item.Status = status
 	s.items[pluginKey] = item
 	if err := s.store.UpsertPlugin(item); err != nil {
@@ -272,6 +334,29 @@ func (s *PluginService) EnabledPlugins() []plugin.Item {
 	return out
 }
 
+func (s *PluginService) Exists(pluginKey string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.items[pluginKey]
+	return ok
+}
+
+func (s *PluginService) IsEnabled(pluginKey string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	item, ok := s.items[pluginKey]
+	if !ok {
+		return false
+	}
+	return item.Status == plugin.StatusEnabled
+}
+
+func (s *PluginService) Store() *store.PluginStore {
+	return s.store
+}
+
 func (s *PluginService) loadFromStore() {
 	items, err := s.store.ListPlugins()
 	if err != nil {
@@ -284,6 +369,12 @@ func (s *PluginService) loadFromStore() {
 }
 
 func inferPluginKey(packageURL string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(packageURL)), "plugin://") {
+		key := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(packageURL), "plugin://"))
+		key = strings.ToLower(strings.Trim(key, "/"))
+		return key
+	}
+
 	base := filepath.Base(packageURL)
 	if base == "." || base == "/" || base == "" {
 		return ""
@@ -339,4 +430,78 @@ func semverPart(parts []string, idx int) int {
 	}
 
 	return value
+}
+
+func (s *PluginService) moduleManifestPath(pluginKey string) string {
+	return filepath.Join(s.pluginsDir, pluginKey, "backend", "module.yaml")
+}
+
+func (s *PluginService) loadManifest(pluginKey string) (pluginModuleManifest, bool, error) {
+	manifestPath := s.moduleManifestPath(pluginKey)
+	if _, err := os.Stat(manifestPath); err != nil {
+		if os.IsNotExist(err) {
+			return pluginModuleManifest{}, false, nil
+		}
+		return pluginModuleManifest{}, false, err
+	}
+
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return pluginModuleManifest{}, false, err
+	}
+
+	manifest := pluginModuleManifest{}
+	if err := yaml.Unmarshal(raw, &manifest); err != nil {
+		return pluginModuleManifest{}, false, err
+	}
+
+	return manifest, true, nil
+}
+
+func mergeManifest(item plugin.Item, manifest pluginModuleManifest) plugin.Item {
+	if manifest.Name != "" {
+		item.Name = manifest.Name
+	}
+	if manifest.Key != "" {
+		item.Key = manifest.Key
+	}
+	if manifest.Version != "" {
+		item.Version = manifest.Version
+	}
+	if manifest.Description != "" {
+		item.Description = manifest.Description
+	}
+	if manifest.Icon != "" {
+		item.Icon = manifest.Icon
+	}
+	if manifest.APIPrefix != "" {
+		item.APIPrefix = manifest.APIPrefix
+	}
+	if manifest.FrontendEntry != "" {
+		item.FrontendEntry = manifest.FrontendEntry
+	}
+
+	if len(manifest.Permissions) > 0 {
+		item.Permissions = manifest.Permissions
+	}
+
+	if len(manifest.Menus) > 0 {
+		menus := make([]plugin.Menu, 0, len(manifest.Menus))
+		for _, m := range manifest.Menus {
+			remoteModule := m.RemoteModule
+			if remoteModule == "" {
+				remoteModule = manifest.RemoteModule
+			}
+			menus = append(menus, plugin.Menu{
+				Name:         m.Name,
+				Path:         m.Path,
+				Component:    m.Component,
+				Icon:         m.Icon,
+				RemoteModule: remoteModule,
+			})
+		}
+		item.Menus = menus
+	}
+
+	return item
 }

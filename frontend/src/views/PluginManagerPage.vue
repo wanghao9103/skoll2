@@ -1,7 +1,7 @@
 <template>
   <div class="page-card">
     <div class="tool-row">
-      <el-input v-model="installForm.packageUrl" placeholder="插件包 URL，例如 https://cdn.example.com/livekit.zip" />
+      <el-input v-model="installForm.packageUrl" placeholder="插件包 URL，例如 plugin://sample-hello 或 https://cdn.example.com/livekit.zip" />
       <el-input v-model="installForm.checksum" placeholder="checksum，可选" />
       <el-button type="primary" @click="onInstall">安装插件</el-button>
       <el-button @click="loadData">刷新</el-button>
@@ -89,6 +89,12 @@ const configDialog = reactive({
   rows: []
 })
 
+function notifyPluginChanged(action, pluginKey) {
+  window.dispatchEvent(new CustomEvent('plugins:changed', {
+    detail: { action, pluginKey }
+  }))
+}
+
 async function loadData() {
   try {
     const res = await getPluginList()
@@ -106,9 +112,11 @@ async function onInstall() {
   try {
     await installPlugin({ ...installForm })
     ElMessage.success('安装成功')
+    const pluginKey = inferPluginKey(installForm.packageUrl)
     installForm.packageUrl = ''
     installForm.checksum = ''
     await loadData()
+    notifyPluginChanged('install', pluginKey)
   } catch (err) {
     ElMessage.error(err.message)
   }
@@ -119,6 +127,7 @@ async function onEnable(pluginKey) {
     await enablePlugin({ pluginKey })
     ElMessage.success('启用成功')
     await loadData()
+    notifyPluginChanged('enable', pluginKey)
   } catch (err) {
     ElMessage.error(err.message)
   }
@@ -136,6 +145,7 @@ async function onUpgrade(pluginKey) {
     await upgradePlugin({ pluginKey, targetVersion: value })
     ElMessage.success('升级成功')
     await loadData()
+    notifyPluginChanged('upgrade', pluginKey)
   } catch (err) {
     if (err === 'cancel' || err === 'close') {
       return
@@ -149,6 +159,7 @@ async function onDisable(pluginKey) {
     await disablePlugin({ pluginKey })
     ElMessage.success('禁用成功')
     await loadData()
+    notifyPluginChanged('disable', pluginKey)
   } catch (err) {
     ElMessage.error(err.message)
   }
@@ -159,6 +170,7 @@ async function onUninstall(pluginKey) {
     await uninstallPlugin({ pluginKey })
     ElMessage.success('卸载成功')
     await loadData()
+    notifyPluginChanged('uninstall', pluginKey)
   } catch (err) {
     ElMessage.error(err.message)
   }
@@ -202,6 +214,14 @@ async function saveConfig() {
   } catch (err) {
     ElMessage.error(err.message)
   }
+}
+
+function inferPluginKey(packageUrl) {
+  if (!packageUrl) {
+    return ''
+  }
+  const segment = packageUrl.split('/').pop() || ''
+  return segment.replace(/\.[^/.]+$/, '').toLowerCase()
 }
 
 onMounted(loadData)

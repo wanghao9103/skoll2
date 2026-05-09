@@ -1,0 +1,16 @@
+name: Sample Hello 插件
+key: sample-hello
+version: 1.0.0
+description: 插件开发与接入演示插件
+icon: Grid
+apiPrefix: /plugin/sample-hello
+frontendEntry: /plugins/sample-hello/remoteEntry.js
+remoteModule: ./App
+permissions:
+  - sample-hello:view
+  - sample-hello:manage
+menus:
+  - name: 示例插件
+    path: /plugins/sample-hello
+    component: RemotePluginPage
+    icon: Grid

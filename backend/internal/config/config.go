@@ -7,6 +7,7 @@ type Config struct {
 	JWTSecret  string
 	DBDriver   string
 	DBDSN      string
+	PluginsDir string
 }
 
 func Load() Config {
@@ -15,6 +16,7 @@ func Load() Config {
 		JWTSecret:  getEnv("JWT_SECRET", "dev-secret-change-me"),
 		DBDriver:   getEnv("DB_DRIVER", "sqlite"),
 		DBDSN:      getEnv("DB_DSN", "skoll2.db"),
+		PluginsDir: getEnv("PLUGINS_DIR", "../plugins"),
 	}
 	return cfg
 }

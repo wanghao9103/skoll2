@@ -17,7 +17,7 @@ func main() {
 	}
 
 	authSvc := service.NewAuthService(cfg.JWTSecret)
-	pluginSvc := service.NewPluginService(pluginStore)
+	pluginSvc := service.NewPluginService(pluginStore, cfg.PluginsDir)
 	menuSvc := service.NewMenuService(pluginSvc)
 
 	r := router.NewEngine(cfg, authSvc, pluginSvc, menuSvc)

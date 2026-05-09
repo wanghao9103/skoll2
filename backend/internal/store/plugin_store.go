@@ -44,6 +44,14 @@ type PluginConfigItem struct {
 	IsSecret bool   `json:"isSecret"`
 }
 
+type SampleHelloRecord struct {
+	ID        uint   `json:"id" gorm:"primaryKey"`
+	Title     string `json:"title" gorm:"size:120;not null"`
+	Content   string `json:"content" gorm:"type:text"`
+	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+}
+
 func NewPluginStore(driver string, dsn string) (*PluginStore, error) {
 	if driver == "" {
 		driver = "sqlite"
@@ -66,7 +74,7 @@ func NewPluginStore(driver string, dsn string) (*PluginStore, error) {
 		return nil, err
 	}
 
-	if err := db.AutoMigrate(&PluginRecord{}, &PluginConfigRecord{}); err != nil {
+	if err := db.AutoMigrate(&PluginRecord{}, &PluginConfigRecord{}, &SampleHelloRecord{}); err != nil {
 		return nil, err
 	}
 
@@ -143,6 +151,44 @@ func (s *PluginStore) ReplacePluginConfigs(pluginKey string, configs []PluginCon
 		}
 		return nil
 	})
+}
+
+func (s *PluginStore) ListSampleHelloRecords() ([]SampleHelloRecord, error) {
+	rows := make([]SampleHelloRecord, 0)
+	if err := s.db.Order("id desc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (s *PluginStore) CreateSampleHelloRecord(title string, content string) (SampleHelloRecord, error) {
+	row := SampleHelloRecord{
+		Title:   title,
+		Content: content,
+	}
+	if err := s.db.Create(&row).Error; err != nil {
+		return SampleHelloRecord{}, err
+	}
+	return row, nil
+}
+
+func (s *PluginStore) UpdateSampleHelloRecord(id uint, title string, content string) (SampleHelloRecord, error) {
+	row := SampleHelloRecord{}
+	if err := s.db.First(&row, id).Error; err != nil {
+		return SampleHelloRecord{}, err
+	}
+
+	row.Title = title
+	row.Content = content
+	if err := s.db.Save(&row).Error; err != nil {
+		return SampleHelloRecord{}, err
+	}
+
+	return row, nil
+}
+
+func (s *PluginStore) DeleteSampleHelloRecord(id uint) error {
+	return s.db.Delete(&SampleHelloRecord{}, id).Error
 }
 
 func toRecord(item plugin.Item) PluginRecord {

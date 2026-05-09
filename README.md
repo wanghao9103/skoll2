@@ -112,3 +112,104 @@ GET /api/plugin/config?pluginKey=livekit
 - 插件信息与配置已持久化存储（SQLite/MySQL）。
 - 插件菜单会附带远程组件元数据（pluginKey、frontendEntry、remoteModule）。
 - 远程组件加载失败时前端会自动降级为占位展示，不影响主框架。
+
+## 10. VS Code 调试
+
+仓库已内置 VS Code 调试配置：
+- [.vscode/launch.json](.vscode/launch.json)
+- [.vscode/tasks.json](.vscode/tasks.json)
+
+可直接使用：
+1. `Backend: Go Server` 调试后端
+2. `Frontend: Chrome` 启动前端并自动打开浏览器调试
+3. `Full Stack: Backend + Frontend` 一键联调
+
+说明：VS Code 调试默认使用 `18080` 端口运行后端，避免与本地 Docker 或其他占用 `8080` 的服务冲突。
+
+## 11. Docker 构建与运行
+
+已提供：
+- [backend/Dockerfile](backend/Dockerfile)
+- [frontend/Dockerfile](frontend/Dockerfile)
+- [frontend/nginx.conf](frontend/nginx.conf)
+- [docker-compose.yml](docker-compose.yml)
+
+常用命令：
+
+```powershell
+docker compose -f docker-compose.yml build --pull
+docker compose -f docker-compose.yml up -d --build
+docker compose -f docker-compose.yml ps
+docker compose -f docker-compose.yml logs -f --tail 200
+docker compose -f docker-compose.yml down
+```
+
+端口映射：
+- 前端：http://localhost:5173
+- 后端：http://localhost:8080
+
+## 12. 部署脚本
+
+已提供跨平台脚本：
+- PowerShell: [scripts/deploy.ps1](scripts/deploy.ps1)
+- Bash: [scripts/deploy.sh](scripts/deploy.sh)
+
+PowerShell 示例：
+
+```powershell
+./scripts/deploy.ps1 up
+./scripts/deploy.ps1 logs
+./scripts/deploy.ps1 down
+```
+
+Bash 示例：
+
+```bash
+./scripts/deploy.sh up
+./scripts/deploy.sh logs
+./scripts/deploy.sh down
+```
+
+## 13. 插件开发方式（后端+前端+数据库）
+
+已补充完整开发规范文档：
+- [docs/插件开发规范.md](docs/插件开发规范.md)
+
+该文档覆盖：
+- 插件后端契约（生命周期、模块元数据）
+- 插件前端契约（远程入口、动态路由元数据）
+- 数据库迁移规范（安装/升级 SQL 管理）
+
+## 14. 下一步（已落地示例插件）
+
+仓库已提供一个可演示开发和使用流程的示例插件：`sample-hello`
+
+关键文件：
+- [plugins/sample-hello/backend/module.yaml](plugins/sample-hello/backend/module.yaml)
+- [plugins/sample-hello/backend/migrations/001_init.sql](plugins/sample-hello/backend/migrations/001_init.sql)
+- [plugins/sample-hello/backend/api/README.md](plugins/sample-hello/backend/api/README.md)
+- [frontend/public/plugins/sample-hello/remoteEntry.js](frontend/public/plugins/sample-hello/remoteEntry.js)
+- [plugins/sample-hello/frontend/README.md](plugins/sample-hello/frontend/README.md)
+
+### 演示安装与使用
+
+1. 在插件管理页安装插件：
+  - `packageUrl = plugin://sample-hello`
+2. 启用插件
+3. 左侧会出现“示例插件”菜单
+4. 点击菜单进入远程插件页面
+5. 在插件管理中给 `sample-hello` 添加配置，页面会实时读取并展示
+
+说明：插件安装会在运行时即时读取 `plugins/<key>/backend/module.yaml` 并注册菜单与前端入口，不需要重启后端服务。
+
+### 示例插件真实接口（已实现）
+
+- `GET /api/plugin/sample-hello/records`
+- `POST /api/plugin/sample-hello/records`
+- `PUT /api/plugin/sample-hello/records/:id`
+- `DELETE /api/plugin/sample-hello/records/:id`
+
+调用顺序建议：
+1. 安装插件
+2. 启用插件
+3. 调用 records 接口

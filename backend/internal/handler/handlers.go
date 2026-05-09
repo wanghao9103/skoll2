@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"skoll2/backend/internal/service"
 
@@ -9,16 +10,18 @@ import (
 )
 
 type Handler struct {
-	authSvc   *service.AuthService
-	pluginSvc *service.PluginService
-	menuSvc   *service.MenuService
+	authSvc        *service.AuthService
+	pluginSvc      *service.PluginService
+	menuSvc        *service.MenuService
+	sampleHelloSvc *service.SampleHelloService
 }
 
-func New(authSvc *service.AuthService, pluginSvc *service.PluginService, menuSvc *service.MenuService) *Handler {
+func New(authSvc *service.AuthService, pluginSvc *service.PluginService, menuSvc *service.MenuService, sampleHelloSvc *service.SampleHelloService) *Handler {
 	return &Handler{
-		authSvc:   authSvc,
-		pluginSvc: pluginSvc,
-		menuSvc:   menuSvc,
+		authSvc:        authSvc,
+		pluginSvc:      pluginSvc,
+		menuSvc:        menuSvc,
+		sampleHelloSvc: sampleHelloSvc,
 	}
 }
 
@@ -161,4 +164,67 @@ func (h *Handler) Menus(c *gin.Context) {
 
 	menus := h.menuSvc.BuildMenus(u, r)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": menus})
+}
+
+func (h *Handler) ListSampleHelloRecords(c *gin.Context) {
+	rows, err := h.sampleHelloSvc.ListRecords()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": rows})
+}
+
+func (h *Handler) CreateSampleHelloRecord(c *gin.Context) {
+	var req service.CreateSampleHelloRecordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	row, err := h.sampleHelloSvc.CreateRecord(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": row})
+}
+
+func (h *Handler) UpdateSampleHelloRecord(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		return
+	}
+
+	var req service.UpdateSampleHelloRecordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	row, err := h.sampleHelloSvc.UpdateRecord(uint(id), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": row})
+}
+
+func (h *Handler) DeleteSampleHelloRecord(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		return
+	}
+
+	if err := h.sampleHelloSvc.DeleteRecord(uint(id)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": gin.H{"id": id}})
 }

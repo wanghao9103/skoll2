@@ -34,7 +34,7 @@ async function loadRemoteComponent() {
   }
 
   try {
-    const remoteUrl = frontendEntry.value
+    const remoteUrl = resolveRemoteUrl(frontendEntry.value)
     const mod = await import(/* @vite-ignore */ remoteUrl)
 
     if (mod && mod.default) {
@@ -51,6 +51,20 @@ async function loadRemoteComponent() {
   } catch (err) {
     ElMessage.warning(err.message || '远程组件加载失败，已使用占位页')
   }
+}
+
+function resolveRemoteUrl(rawUrl) {
+  if (!rawUrl) {
+    return ''
+  }
+
+  if (/^https?:\/\//i.test(rawUrl)) {
+    return rawUrl
+  }
+
+  // In Vite dev mode, importing "/public" assets by bare absolute path
+  // is treated as source import and can fail. Use a full URL to force runtime fetch.
+  return new URL(rawUrl, window.location.origin).href
 }
 
 onMounted(loadRemoteComponent)

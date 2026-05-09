@@ -1,5 +1,5 @@
 :root {
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'Trebuchet MS', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: #18222c;
   background: #eef3f8;
 }
@@ -19,32 +19,65 @@ body {
 .layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 252px 1fr;
 }
 
 .layout-aside {
-  background: linear-gradient(180deg, #17314f 0%, #234c76 100%);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(68, 212, 255, 0.2), transparent 35%),
+    radial-gradient(circle at 90% 80%, rgba(118, 138, 255, 0.2), transparent 28%),
+    linear-gradient(180deg, #0b1830 0%, #102947 55%, #0e3459 100%);
   color: #fff;
-  padding: 16px;
+  padding: 18px 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.brand-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #47e0ff, #6decc8);
+  box-shadow: 0 0 0 6px rgba(71, 224, 255, 0.18);
 }
 
 .brand {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  margin-bottom: 14px;
+  letter-spacing: 0.4px;
 }
 
 .menu {
   border-right: none;
   background: transparent;
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: #dbe8ff;
+  --el-menu-hover-bg-color: rgba(113, 194, 255, 0.15);
+  --el-menu-active-color: #ffffff;
 }
 
 .menu .el-menu-item {
   color: #ecf2ff;
+  margin: 7px 6px;
+  border-radius: 12px;
+  height: 42px;
+  line-height: 42px;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.menu .el-menu-item:hover {
+  transform: translateX(2px);
 }
 
 .menu .el-menu-item.is-active {
-  background-color: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(90deg, rgba(71, 201, 255, 0.34), rgba(146, 95, 255, 0.22));
+  box-shadow: inset 0 0 0 1px rgba(168, 221, 255, 0.3);
   color: #fff;
 }
 
@@ -54,17 +87,19 @@ body {
 }
 
 .layout-header {
-  height: 58px;
-  background: #fff;
-  border-bottom: 1px solid #e8edf2;
+  height: 62px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #dfe8f3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 18px;
 }
 
 .title {
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .right-tools {
@@ -73,8 +108,19 @@ body {
   align-items: center;
 }
 
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(13, 69, 125, 0.08), rgba(64, 117, 172, 0.14));
+  cursor: pointer;
+}
+
 .layout-content {
   padding: 16px;
+  background: linear-gradient(135deg, #d7dee8 0%, #c7d0da 50%, #d1dce4 100%);
 }
 
 .page-card {
@@ -105,16 +151,62 @@ body {
 
 .login-page {
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(72, 202, 255, 0.18) 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(121, 226, 177, 0.2) 0%, transparent 36%),
+    linear-gradient(120deg, #0a1933 0%, #163763 44%, #1d4f7f 100%);
+}
+
+.login-shell {
+  width: min(1120px, 100%);
+  min-height: min(640px, 90vh);
+  background: rgba(6, 22, 44, 0.42);
+  border: 1px solid rgba(161, 216, 255, 0.24);
+  border-radius: 22px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  box-shadow: 0 30px 80px rgba(6, 19, 40, 0.45);
+}
+
+.login-hero {
+  padding: 42px 40px;
+  display: flex;
+  align-items: center;
+}
+
+.login-hero-content h1 {
+  margin: 0;
+  font-size: 42px;
+  color: #dff5ff;
+}
+
+.login-hero-content p {
+  margin: 14px 0 24px;
+  color: #c1daef;
+  max-width: 460px;
+}
+
+.login-hero-image {
+  width: min(100%, 540px);
+  border-radius: 16px;
+  border: 1px solid rgba(180, 225, 255, 0.32);
+}
+
+.login-panel {
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 25% 10%, #d7e8ff 0%, transparent 42%),
-    radial-gradient(circle at 90% 90%, #d0f6ea 0%, transparent 35%),
-    #edf3f8;
+  padding: 30px;
+  background: linear-gradient(180deg, rgba(236, 244, 255, 0.95), rgba(231, 241, 252, 0.95));
 }
 
 .login-card {
-  width: min(430px, 92vw);
+  width: min(430px, 100%);
+  border-radius: 14px;
 }
 
 .login-title {
@@ -123,10 +215,27 @@ body {
   color: #17314f;
 }
 
+.login-submit {
+  width: 100%;
+  height: 42px;
+  font-weight: 600;
+}
+
 .hint {
   margin-top: 10px;
   color: #5f7187;
   font-size: 12px;
+}
+
+.profile-card {
+  max-width: 900px;
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 @media (max-width: 900px) {
@@ -140,5 +249,22 @@ body {
 
   .tool-row {
     grid-template-columns: 1fr;
+  }
+
+  .login-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .login-hero {
+    padding: 22px;
+  }
+
+  .login-hero-content h1 {
+    font-size: 30px;
+  }
+
+  .login-panel {
+    padding: 16px;
   }
 }

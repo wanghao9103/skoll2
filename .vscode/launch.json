@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: Go Server",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/backend/cmd/server",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "SERVER_ADDR": ":18080",
+        "JWT_SECRET": "dev-secret-change-me",
+        "DB_DRIVER": "sqlite",
+        "DB_DSN": "skoll2.db"
+      }
+    },
+    {
+      "name": "Frontend: Chrome",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "frontend: dev"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack: Backend + Frontend",
+      "configurations": [
+        "Backend: Go Server",
+        "Frontend: Chrome"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skoll2-backend
+    environment:
+      SERVER_ADDR: :8080
+      JWT_SECRET: dev-secret-change-me
+      DB_DRIVER: sqlite
+      DB_DSN: /app/data/skoll2.db
+    volumes:
+      - backend-data:/app/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: skoll2-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  backend-data:

@@ -7,12 +7,24 @@ import DashboardPage from '../views/DashboardPage.vue'
 import PluginManagerPage from '../views/PluginManagerPage.vue'
 import PluginPage from '../views/PluginPage.vue'
 import RemotePluginPage from '../views/RemotePluginPage.vue'
+import ProfilePage from '../views/ProfilePage.vue'
 
 const componentMap = {
   DashboardPage,
   PluginManagerPage,
   PluginPage,
-  RemotePluginPage
+  RemotePluginPage,
+  ProfilePage
+}
+
+const dynamicRouteNames = new Set()
+
+function toRouteName(path) {
+  return `menu-${path.replace(/^\//, '').replace(/\//g, '-')}`
+}
+
+function isStaticPath(path) {
+  return path === '/dashboard' || path === '/plugins' || path === '/profile'
 }
 
 const router = createRouter({
@@ -39,6 +51,11 @@ const router = createRouter({
           path: 'plugins',
           name: 'plugins',
           component: PluginManagerPage
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: ProfilePage
         }
       ]
     }
@@ -46,21 +63,29 @@ const router = createRouter({
 })
 
 export function applyDynamicRoutes(menus = []) {
-  const added = []
+  const desiredNames = new Set()
+
   menus.forEach((menu) => {
-    const path = (menu.path || '').replace(/^\//, '')
-    if (!path || path === 'dashboard' || path === 'plugins') {
+    const fullPath = menu.path || ''
+    if (!fullPath || isStaticPath(fullPath)) {
       return
     }
 
-    const routeName = `menu-${path.replace(/\//g, '-')}`
+    const childPath = fullPath.replace(/^\//, '')
+    if (!childPath) {
+      return
+    }
+
+    const routeName = toRouteName(fullPath)
+    desiredNames.add(routeName)
+
     if (router.hasRoute(routeName)) {
       return
     }
 
     const component = componentMap[menu.component] || PluginPage
     router.addRoute('root', {
-      path,
+      path: childPath,
       name: routeName,
       component,
       meta: {
@@ -71,9 +96,20 @@ export function applyDynamicRoutes(menus = []) {
         remoteModule: menu.remoteModule
       }
     })
-    added.push(routeName)
+    dynamicRouteNames.add(routeName)
   })
-  return added
+
+  for (const routeName of [...dynamicRouteNames]) {
+    if (desiredNames.has(routeName)) {
+      continue
+    }
+    if (router.hasRoute(routeName)) {
+      router.removeRoute(routeName)
+    }
+    dynamicRouteNames.delete(routeName)
+  }
+
+  return [...desiredNames]
 }
 
 router.beforeEach((to, _from, next) => {

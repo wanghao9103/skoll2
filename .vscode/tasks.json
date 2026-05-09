@@ -1,0 +1,72 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "frontend: dev",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend",
+        "env": {
+          "VITE_API_BASE": "http://localhost:18080"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*vite.*$",
+          "endsPattern": "^\\[[0-9;]*m?\s*Local:\\s*http://.*$|^\s*Local:\\s*http://.*$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "backend: run",
+      "type": "shell",
+      "command": "go",
+      "args": ["run", "./cmd/server"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "env": {
+          "SERVER_ADDR": ":18080"
+        }
+      }
+    },
+    {
+      "label": "docker: build",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "-f", "docker-compose.yml", "build", "--pull"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "docker: up",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "-f", "docker-compose.yml", "up", "-d", "--build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "docker: down",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "-f", "docker-compose.yml", "down"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    }
+  ]
+}
