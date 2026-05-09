@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -89,7 +90,7 @@ func (s *PluginService) List() []plugin.Item {
 
 	out := make([]plugin.Item, 0, len(s.items))
 	for _, item := range s.items {
-		out = append(out, item)
+		out = append(out, s.applyRuntimeSupport(item))
 	}
 	return out
 }
@@ -141,6 +142,7 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 		item = mergeManifest(item, manifest)
 	}
 	item.Type = s.detectPluginType(item.Key)
+	item = s.applyRuntimeSupport(item)
 	if isPluginProtocol && !loaded {
 		return plugin.Item{}, fmt.Errorf("plugin manifest not found: %s", s.moduleManifestPath(key))
 	}
@@ -352,6 +354,14 @@ func (s *PluginService) setState(pluginKey string, status plugin.Status) (plugin
 	item.Type = s.detectPluginType(pluginKey)
 
 	item.Status = status
+	item = s.applyRuntimeSupport(item)
+	if status == plugin.StatusEnabled && !item.RuntimeSupported {
+		if strings.TrimSpace(item.RuntimeReason) != "" {
+			return plugin.Item{}, errors.New(item.RuntimeReason)
+		}
+		return plugin.Item{}, errors.New("plugin runtime is not supported in current environment")
+	}
+
 	s.items[pluginKey] = item
 	if err := s.store.UpsertPlugin(item); err != nil {
 		return plugin.Item{}, err
@@ -366,7 +376,7 @@ func (s *PluginService) EnabledPlugins() []plugin.Item {
 	out := make([]plugin.Item, 0)
 	for _, item := range s.items {
 		if item.Status == plugin.StatusEnabled {
-			out = append(out, item)
+			out = append(out, s.applyRuntimeSupport(item))
 		}
 	}
 
@@ -414,8 +424,31 @@ func (s *PluginService) loadFromStore() {
 			item.Status = status
 		}
 		item.Type = s.detectPluginType(item.Key)
+		item = s.applyRuntimeSupport(item)
 		s.items[item.Key] = item
 	}
+}
+
+func (s *PluginService) applyRuntimeSupport(item plugin.Item) plugin.Item {
+	channel := strings.ToLower(strings.TrimSpace(item.Type))
+	if channel == "" {
+		channel = "unknown"
+	}
+
+	item.RuntimeSupported = true
+	item.RuntimeReason = ""
+
+	if channel == "go-plugin" && runtime.GOOS != "linux" {
+		item.RuntimeSupported = false
+		item.RuntimeReason = fmt.Sprintf("插件通道 go-plugin 仅支持 Linux，当前环境为 %s", runtime.GOOS)
+		return item
+	}
+
+	if channel == "unknown" {
+		item.RuntimeReason = "未识别插件通道，请检查 backend/api/backend.yaml 中的 channel 配置"
+	}
+
+	return item
 }
 
 func (s *PluginService) detectPluginType(pluginKey string) string {

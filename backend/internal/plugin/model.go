@@ -11,19 +11,19 @@ const (
 )
 
 type Item struct {
-	Name          string   `json:"name"`
-	Key           string   `json:"key"`
-	Type          string   `json:"type"`
-	RuntimeSupported bool   `json:"runtimeSupported"`
-	RuntimeReason    string `json:"runtimeReason,omitempty"`
-	Version       string   `json:"version"`
-	Description   string   `json:"description"`
-	Icon          string   `json:"icon"`
-	Status        Status   `json:"status"`
-	APIPrefix     string   `json:"apiPrefix"`
-	FrontendEntry string   `json:"frontendEntry"`
-	Menus         []Menu   `json:"menus"`
-	Permissions   []string `json:"permissions"`
+	Name             string   `json:"name"`
+	Key              string   `json:"key"`
+	Type             string   `json:"type"`
+	RuntimeSupported bool     `json:"runtimeSupported"`
+	RuntimeReason    string   `json:"runtimeReason,omitempty"`
+	Version          string   `json:"version"`
+	Description      string   `json:"description"`
+	Icon             string   `json:"icon"`
+	Status           Status   `json:"status"`
+	APIPrefix        string   `json:"apiPrefix"`
+	FrontendEntry    string   `json:"frontendEntry"`
+	Menus            []Menu   `json:"menus"`
+	Permissions      []string `json:"permissions"`
 }
 
 type Menu struct {

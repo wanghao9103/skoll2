@@ -13,6 +13,14 @@
       <el-table-column prop="name" label="名称" min-width="140" />
       <el-table-column prop="key" label="标识" min-width="140" />
       <el-table-column prop="type" label="类型" width="140" />
+      <el-table-column label="环境支持" width="120">
+        <template #default="scope">
+          <el-tag :type="scope.row.runtimeSupported ? 'success' : 'danger'" size="small">
+            {{ scope.row.runtimeSupported ? '支持' : '不支持' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="runtimeReason" label="说明" min-width="260" />
       <el-table-column prop="version" label="版本" width="120" />
       <el-table-column prop="status" label="状态" width="130" />
       <el-table-column prop="apiPrefix" label="API 前缀" min-width="160" />
