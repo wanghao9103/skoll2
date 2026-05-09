@@ -1,0 +1,46 @@
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# Go / Backend build outputs
+backend/bin/
+backend/dist/
+backend/*.exe
+backend/*.dll
+backend/*.so
+backend/*.dylib
+backend/*.test
+
+# Go coverage / profiling
+*.out
+coverage.*
+*.coverprofile
+*.pprof
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+backend/*.db
+
+# Env / local overrides
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
