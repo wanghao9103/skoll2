@@ -24,7 +24,7 @@ func NewEngine(cfg config.Config, authSvc *service.AuthService, pluginSvc *servi
 		MaxAge:           12 * time.Hour,
 	}))
 
-	pluginAPISvc := service.NewPluginAPIService(pluginSvc, pluginSvc.Store())
+	pluginAPISvc := service.NewPluginAPIService(cfg, pluginSvc, pluginSvc.Store())
 	h := handler.New(authSvc, pluginSvc, menuSvc, pluginAPISvc)
 
 	r.GET("/health", h.Health)

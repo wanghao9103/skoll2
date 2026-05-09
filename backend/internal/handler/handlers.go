@@ -165,14 +165,23 @@ func (h *Handler) Menus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": menus})
 }
 
-func (h *Handler) PluginRouteHandler(pluginKey string, routeHandler string) gin.HandlerFunc {
+func (h *Handler) PluginRouteHandler(pluginKey string, meta service.PluginRouteMeta) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		data, err := h.pluginAPISvc.Execute(c, pluginKey, routeHandler)
+		res, err := h.pluginAPISvc.Execute(c, pluginKey, meta)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": data})
+		if res.Passthrough {
+			status := res.StatusCode
+			if status == 0 {
+				status = http.StatusOK
+			}
+			c.JSON(status, res.Body)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": res.Body})
 	}
 }

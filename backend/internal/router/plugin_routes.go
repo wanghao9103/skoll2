@@ -21,6 +21,7 @@ type pluginRouteManifest struct {
 type pluginRouteItem struct {
 	Method  string `yaml:"method"`
 	Path    string `yaml:"path"`
+	Channel string `yaml:"channel"`
 	Handler string `yaml:"handler"`
 }
 
@@ -38,7 +39,10 @@ func registerPluginRoutes(protected *gin.RouterGroup, h *handler.Handler, plugin
 
 		for _, rt := range manifest.Routes {
 			fullPath := joinRoutePath(base, rt.Path)
-			handlerFn := h.PluginRouteHandler(item.Key, strings.TrimSpace(rt.Handler))
+			handlerFn := h.PluginRouteHandler(item.Key, service.PluginRouteMeta{
+				Channel: strings.TrimSpace(rt.Channel),
+				Handler: strings.TrimSpace(rt.Handler),
+			})
 			registerRoute(protected, strings.ToUpper(strings.TrimSpace(rt.Method)), fullPath, handlerFn)
 		}
 	}

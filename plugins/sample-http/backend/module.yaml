@@ -1,0 +1,16 @@
+name: Sample HTTP 插件
+key: sample-http
+version: 1.0.0
+description: 独立进程 HTTP 通道示例
+icon: Link
+apiPrefix: /plugin/sample-http
+frontendEntry: /plugins/sample-http/remoteEntry.js
+remoteModule: ./App
+permissions:
+  - sample-http:view
+menus:
+  - name: HTTP 通道示例
+    path: /plugins/sample-http
+    component: RemotePluginPage
+    icon: Link
+    remoteModule: ./App

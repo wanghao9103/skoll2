@@ -2,13 +2,17 @@ apiPrefix: /plugin/sample-hello
 routes:
   - method: GET
     path: /records
+    channel: js
     handler: listRecords
   - method: POST
     path: /records
+    channel: js
     handler: createRecord
   - method: PUT
     path: /records/:id
+    channel: js
     handler: updateRecord
   - method: DELETE
     path: /records/:id
+    channel: js
     handler: deleteRecord

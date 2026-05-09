@@ -1,0 +1,16 @@
+channel: process-http
+process:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+  maxIdleConnsPerHost: 2
+
+  command: go
+  args:
+    - run
+    - ./process-http
+  env: {}
+  port: 19101
+  healthPath: /health
+  routePrefix: /api/plugin/sample-http

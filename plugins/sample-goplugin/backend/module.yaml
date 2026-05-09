@@ -1,0 +1,16 @@
+name: Sample GoPlugin 插件
+key: sample-goplugin
+version: 1.0.0
+description: Linux go plugin (.so) 通道示例
+icon: Cpu
+apiPrefix: /plugin/sample-goplugin
+frontendEntry: /plugins/sample-goplugin/remoteEntry.js
+remoteModule: ./App
+permissions:
+  - sample-goplugin:view
+menus:
+  - name: GoPlugin 通道示例
+    path: /plugins/sample-goplugin
+    component: RemotePluginPage
+    icon: Cpu
+    remoteModule: ./App

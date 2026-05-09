@@ -1,0 +1,6 @@
+apiPrefix: /plugin/sample-http
+routes:
+  - method: GET
+    path: /ping
+    channel: process-http
+    handler: ping

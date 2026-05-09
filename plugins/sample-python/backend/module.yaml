@@ -1,0 +1,16 @@
+name: Sample Python 插件
+key: sample-python
+version: 1.0.0
+description: Python 独立进程通道示例
+icon: Cpu
+apiPrefix: /plugin/sample-python
+frontendEntry: /plugins/sample-python/remoteEntry.js
+remoteModule: ./App
+permissions:
+  - sample-python:view
+menus:
+  - name: Python 通道示例
+    path: /plugins/sample-python
+    component: RemotePluginPage
+    icon: Cpu
+    remoteModule: ./App

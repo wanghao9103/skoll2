@@ -1,0 +1,15 @@
+channel: python
+process:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+  maxIdleConnsPerHost: 2
+
+  command: python
+  args:
+    - ./process-python/app.py
+  env: {}
+  port: 19102
+  healthPath: /health
+  routePrefix: /api/plugin/sample-python

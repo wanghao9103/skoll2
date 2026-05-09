@@ -1,0 +1,6 @@
+apiPrefix: /plugin/sample-goplugin
+routes:
+  - method: GET
+    path: /ping
+    channel: go-plugin
+    handler: Ping

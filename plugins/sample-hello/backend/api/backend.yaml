@@ -1,0 +1,22 @@
+# Backend channel for this plugin: js | process-http | process-grpc | python
+# - js: execute handlers.js in host runtime.
+# - process-http: proxy to an independent process over HTTP.
+# - python: same as process-http, usually command=python.
+# - process-grpc: reserved channel placeholder.
+channel: js
+
+# Low-resource defaults are inherited from host config when omitted.
+process:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+  maxIdleConnsPerHost: 2
+
+  # Configure these when using process-http or python channel.
+  command: ""
+  args: []
+  env: {}
+  port: 0
+  healthPath: /health
+  routePrefix: /api/plugin/sample-hello

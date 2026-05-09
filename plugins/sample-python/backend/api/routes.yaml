@@ -1,0 +1,6 @@
+apiPrefix: /plugin/sample-python
+routes:
+  - method: GET
+    path: /ping
+    channel: python
+    handler: ping
