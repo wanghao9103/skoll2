@@ -37,8 +37,8 @@ type PluginRecord struct {
 
 type PluginConfigRecord struct {
 	ID        uint   `gorm:"primaryKey"`
-	PluginKey string `gorm:"size:120;index:idx_plugin_key"`
-	ConfigKey string `gorm:"size:120;index:idx_plugin_config_key,unique"`
+	PluginKey string `gorm:"size:120;index:idx_plugin_key;uniqueIndex:uk_plugin_config_key"`
+	ConfigKey string `gorm:"size:120;uniqueIndex:uk_plugin_config_key"`
 	Value     string `gorm:"type:text"`
 	IsSecret  bool
 }
@@ -80,6 +80,9 @@ func NewPluginStore(driver string, dsn string) (*PluginStore, error) {
 	}
 
 	if err := db.AutoMigrate(&PluginRecord{}, &PluginConfigRecord{}, &SampleHelloRecord{}); err != nil {
+		return nil, err
+	}
+	if err := runMigrations(db); err != nil {
 		return nil, err
 	}
 

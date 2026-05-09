@@ -37,6 +37,30 @@ $env:DB_DRIVER = "mysql"
 $env:DB_DSN = "root:123456@tcp(127.0.0.1:3306)/skoll2?charset=utf8mb4&parseTime=True&loc=Local"
 ```
 
+## 3.1 后端配置文件
+
+后端新增配置文件：
+- [backend/configs/config.yaml](backend/configs/config.yaml)
+
+默认加载顺序：
+1. 内置默认值
+2. `backend/configs/config.yaml`
+3. 环境变量（最高优先级）
+
+可通过环境变量指定配置文件路径：
+
+```powershell
+$env:CONFIG_FILE = "D:/working/skoll2/backend/configs/config.yaml"
+```
+
+在配置文件中启用 MySQL 的示例：
+
+```yaml
+database:
+  driver: mysql
+  dsn: root:123456@tcp(127.0.0.1:3306)/skoll2?charset=utf8mb4&parseTime=True&loc=Local
+```
+
 ## 4. 后端启动
 
 ```powershell
@@ -112,6 +136,7 @@ GET /api/plugin/config?pluginKey=livekit
 - 插件信息与配置已持久化存储（SQLite/MySQL）。
 - 插件菜单会附带远程组件元数据（pluginKey、frontendEntry、remoteModule）。
 - 远程组件加载失败时前端会自动降级为占位展示，不影响主框架。
+- 后端启动时会执行数据库迁移（`schema_migration_records`），包含插件类型字段和插件配置索引修复。
 
 ## 10. VS Code 调试
 

@@ -1,0 +1,22 @@
+server:
+  addr: ":8080"
+
+auth:
+  jwtSecret: "dev-secret-change-me"
+
+database:
+  # sqlite | mysql
+  driver: "sqlite"
+  # sqlite example: skoll2.db
+  # mysql example: root:123456@tcp(127.0.0.1:3306)/skoll2?charset=utf8mb4&parseTime=True&loc=Local
+  dsn: "skoll2.db"
+
+plugins:
+  dir: "../plugins"
+  process:
+    defaultChannel: "js"
+    startupStrategy: "lazy"
+    startupTimeoutMs: 2000
+    requestTimeoutMs: 3000
+    idleRecycleSeconds: 180
+    maxIdleConnsPerHost: 2
