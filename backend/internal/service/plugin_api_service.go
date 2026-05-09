@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/rpc"
+	"net/rpc/jsonrpc"
 	"net/url"
 	"os"
 	"os/exec"
@@ -35,6 +38,7 @@ type PluginAPIService struct {
 
 	mu        sync.Mutex
 	processes map[string]*processState
+	stats     map[string]*processStats
 }
 
 type processDefaults struct {
@@ -49,6 +53,7 @@ type processDefaults struct {
 type backendProfile struct {
 	Channel  string          `yaml:"channel"`
 	Process  processProfile  `yaml:"process"`
+	GRPC     grpcProfile     `yaml:"grpc"`
 	GoPlugin goPluginProfile `yaml:"goPlugin"`
 }
 
@@ -70,10 +75,51 @@ type processProfile struct {
 	MaxIdleConnsPerHost int               `yaml:"maxIdleConnsPerHost"`
 }
 
+type grpcProfile struct {
+	Command            string            `yaml:"command"`
+	Args               []string          `yaml:"args"`
+	Env                map[string]string `yaml:"env"`
+	Address            string            `yaml:"address"`
+	StartupStrategy    string            `yaml:"startupStrategy"`
+	StartupTimeoutMs   int               `yaml:"startupTimeoutMs"`
+	RequestTimeoutMs   int               `yaml:"requestTimeoutMs"`
+	IdleRecycleSeconds int               `yaml:"idleRecycleSeconds"`
+}
+
 type processState struct {
-	cmd      *exec.Cmd
-	profile  processProfile
-	lastUsed time.Time
+	cmd               *exec.Cmd
+	pluginKey         string
+	key               string
+	channel           string
+	idleRecycleSecond int
+	startedAt         time.Time
+	lastUsed          time.Time
+}
+
+type processStats struct {
+	key            string
+	pluginKey      string
+	channel        string
+	restartCount   int
+	lastStartAt    time.Time
+	lastUsedAt     time.Time
+	lastStopAt     time.Time
+	lastExitReason string
+	lastError      string
+}
+
+type PluginProcessStatus struct {
+	Key            string `json:"key"`
+	PluginKey      string `json:"pluginKey"`
+	Channel        string `json:"channel"`
+	Running        bool   `json:"running"`
+	PID            int    `json:"pid"`
+	RestartCount   int    `json:"restartCount"`
+	LastStartAt    string `json:"lastStartAt,omitempty"`
+	LastUsedAt     string `json:"lastUsedAt,omitempty"`
+	LastStopAt     string `json:"lastStopAt,omitempty"`
+	LastExitReason string `json:"lastExitReason,omitempty"`
+	LastError      string `json:"lastError,omitempty"`
 }
 
 type execRequest struct {
@@ -104,6 +150,7 @@ func NewPluginAPIService(cfg config.Config, pluginSvc *PluginService, pluginStor
 		},
 		client:    &http.Client{Transport: transport},
 		processes: map[string]*processState{},
+		stats:     map[string]*processStats{},
 	}
 
 	if svc.defaults.DefaultChannel == "" {
@@ -164,6 +211,8 @@ func (s *PluginAPIService) Execute(c *gin.Context, pluginKey string, meta Plugin
 		return PluginExecuteResult{StatusCode: http.StatusOK, Body: data}, nil
 	case "process-http", "python":
 		return s.executeProcessHTTP(pluginKey, profile.Process, req)
+	case "process-grpc":
+		return s.executeProcessGRPC(pluginKey, meta.Handler, profile.GRPC, req)
 	case "go-plugin":
 		data, err := s.executeGoPlugin(pluginKey, meta.Handler, req, profile.GoPlugin)
 		if err != nil {
@@ -214,7 +263,7 @@ func (s *PluginAPIService) executeJS(pluginKey string, routeHandler string, req 
 
 func (s *PluginAPIService) executeProcessHTTP(pluginKey string, cfg processProfile, req execRequest) (PluginExecuteResult, error) {
 	normalized := s.normalizeProcessProfile(cfg)
-	if err := s.ensureProcess(pluginKey, normalized); err != nil {
+	if err := s.ensureHTTPProcess(pluginKey, normalized); err != nil {
 		return PluginExecuteResult{}, err
 	}
 
@@ -287,6 +336,46 @@ func (s *PluginAPIService) executeProcessHTTP(pluginKey string, cfg processProfi
 	return PluginExecuteResult{StatusCode: resp.StatusCode, Body: map[string]any{"raw": string(raw)}}, nil
 }
 
+func (s *PluginAPIService) executeProcessGRPC(pluginKey string, routeHandler string, cfg grpcProfile, req execRequest) (PluginExecuteResult, error) {
+	normalized := s.normalizeGRPCProfile(cfg)
+	if err := s.ensureGRPCProcess(pluginKey, normalized); err != nil {
+		return PluginExecuteResult{}, err
+	}
+
+	conn, err := net.DialTimeout("tcp", normalized.Address, time.Duration(normalized.RequestTimeoutMs)*time.Millisecond)
+	if err != nil {
+		return PluginExecuteResult{}, err
+	}
+	defer conn.Close()
+
+	client := rpc.NewClientWithCodec(jsonrpc.NewClientCodec(conn))
+	defer client.Close()
+
+	grpcReq := &GRPCRouteRequest{
+		Handler: normalizeHandlerName(routeHandler),
+		Method:  req.method,
+		Path:    req.path,
+		Query:   req.query,
+		Params:  req.params,
+		Body:    req.bodyMap,
+	}
+
+	grpcRes := &GRPCRouteResponse{}
+	if err := client.Call("PluginGateway.Handle", grpcReq, grpcRes); err != nil {
+		return PluginExecuteResult{}, err
+	}
+	if grpcRes.Error != "" {
+		return PluginExecuteResult{}, errors.New(grpcRes.Error)
+	}
+
+	status := grpcRes.StatusCode
+	if status <= 0 {
+		status = http.StatusOK
+	}
+
+	return PluginExecuteResult{StatusCode: status, Body: grpcRes.Body, Passthrough: grpcRes.Passthrough}, nil
+}
+
 func (s *PluginAPIService) buildRuntimeObject(pluginKey string) map[string]any {
 	db := s.runtime.DB()
 	cache := s.runtime.Cache()
@@ -342,6 +431,7 @@ func (s *PluginAPIService) loadBackendProfile(pluginKey string) (backendProfile,
 		profile.Channel = s.defaults.DefaultChannel
 	}
 	profile.Process = s.normalizeProcessProfile(profile.Process)
+	profile.GRPC = s.normalizeGRPCProfile(profile.GRPC)
 	if strings.TrimSpace(profile.GoPlugin.SoPath) == "" {
 		profile.GoPlugin.SoPath = "./dist/plugin.so"
 	}
@@ -370,18 +460,101 @@ func (s *PluginAPIService) normalizeProcessProfile(p processProfile) processProf
 	return p
 }
 
-func (s *PluginAPIService) ensureProcess(pluginKey string, cfg processProfile) error {
+func (s *PluginAPIService) normalizeGRPCProfile(p grpcProfile) grpcProfile {
+	if strings.TrimSpace(p.StartupStrategy) == "" {
+		p.StartupStrategy = s.defaults.StartupStrategy
+	}
+	if p.StartupTimeoutMs <= 0 {
+		p.StartupTimeoutMs = s.defaults.StartupTimeoutMs
+	}
+	if p.RequestTimeoutMs <= 0 {
+		p.RequestTimeoutMs = s.defaults.RequestTimeoutMs
+	}
+	if p.IdleRecycleSeconds <= 0 {
+		p.IdleRecycleSeconds = s.defaults.IdleRecycleSeconds
+	}
+	return p
+}
+
+func buildProcessKey(pluginKey string, channel string) string {
+	return pluginKey + ":" + channel
+}
+
+func (s *PluginAPIService) upsertStatLocked(key string, pluginKey string, channel string) *processStats {
+	item, ok := s.stats[key]
+	if !ok || item == nil {
+		item = &processStats{key: key, pluginKey: pluginKey, channel: channel}
+		s.stats[key] = item
+	}
+	return item
+}
+
+func (s *PluginAPIService) markStartLocked(key string, pluginKey string, channel string) {
+	now := time.Now()
+	item := s.upsertStatLocked(key, pluginKey, channel)
+	item.restartCount++
+	item.lastStartAt = now
+	item.lastUsedAt = now
+	item.lastError = ""
+	item.lastExitReason = ""
+}
+
+func (s *PluginAPIService) markUsedLocked(key string, pluginKey string, channel string) {
+	now := time.Now()
+	item := s.upsertStatLocked(key, pluginKey, channel)
+	item.lastUsedAt = now
+}
+
+func (s *PluginAPIService) markErrorLocked(key string, pluginKey string, channel string, err error) {
+	if err == nil {
+		return
+	}
+	item := s.upsertStatLocked(key, pluginKey, channel)
+	item.lastError = err.Error()
+}
+
+func (s *PluginAPIService) markStopLocked(key string, pluginKey string, channel string, reason string) {
+	item := s.upsertStatLocked(key, pluginKey, channel)
+	item.lastStopAt = time.Now()
+	item.lastExitReason = strings.TrimSpace(reason)
+}
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
+func isProcessRunning(state *processState) bool {
+	if state == nil || state.cmd == nil || state.cmd.Process == nil {
+		return false
+	}
+	if state.cmd.ProcessState == nil {
+		return true
+	}
+	return !state.cmd.ProcessState.Exited()
+}
+
+func (s *PluginAPIService) ensureHTTPProcess(pluginKey string, cfg processProfile) error {
+	key := buildProcessKey(pluginKey, "process-http")
+
 	s.mu.Lock()
-	state, ok := s.processes[pluginKey]
+	state, ok := s.processes[key]
 	if ok && state.cmd != nil && state.cmd.Process != nil && (state.cmd.ProcessState == nil || !state.cmd.ProcessState.Exited()) {
 		state.lastUsed = time.Now()
+		s.markUsedLocked(key, pluginKey, "process-http")
 		s.mu.Unlock()
 		return nil
 	}
 	s.mu.Unlock()
 
 	if strings.TrimSpace(cfg.Command) == "" || cfg.Port <= 0 {
-		return errors.New("process channel requires backend/api/backend.yaml with process.command and process.port")
+		err := errors.New("process channel requires backend/api/backend.yaml with process.command and process.port")
+		s.mu.Lock()
+		s.markErrorLocked(key, pluginKey, "process-http", err)
+		s.mu.Unlock()
+		return err
 	}
 
 	cmd := exec.Command(cfg.Command, cfg.Args...)
@@ -391,6 +564,9 @@ func (s *PluginAPIService) ensureProcess(pluginKey string, cfg processProfile) e
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	if err := cmd.Start(); err != nil {
+		s.mu.Lock()
+		s.markErrorLocked(key, pluginKey, "process-http", err)
+		s.mu.Unlock()
 		return err
 	}
 
@@ -399,7 +575,12 @@ func (s *PluginAPIService) ensureProcess(pluginKey string, cfg processProfile) e
 	for {
 		if time.Now().After(deadline) {
 			_ = cmd.Process.Kill()
-			return fmt.Errorf("plugin process startup timeout: %s", pluginKey)
+			err := fmt.Errorf("plugin process startup timeout: %s", pluginKey)
+			s.mu.Lock()
+			s.markErrorLocked(key, pluginKey, "process-http", err)
+			s.markStopLocked(key, pluginKey, "process-http", "startup timeout")
+			s.mu.Unlock()
+			return err
 		}
 		resp, err := s.client.Get(healthURL)
 		if err == nil {
@@ -412,7 +593,70 @@ func (s *PluginAPIService) ensureProcess(pluginKey string, cfg processProfile) e
 	}
 
 	s.mu.Lock()
-	s.processes[pluginKey] = &processState{cmd: cmd, profile: cfg, lastUsed: time.Now()}
+	now := time.Now()
+	s.processes[key] = &processState{cmd: cmd, key: key, pluginKey: pluginKey, channel: "process-http", idleRecycleSecond: cfg.IdleRecycleSeconds, startedAt: now, lastUsed: now}
+	s.markStartLocked(key, pluginKey, "process-http")
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *PluginAPIService) ensureGRPCProcess(pluginKey string, cfg grpcProfile) error {
+	key := buildProcessKey(pluginKey, "process-grpc")
+
+	s.mu.Lock()
+	state, ok := s.processes[key]
+	if ok && state.cmd != nil && state.cmd.Process != nil && (state.cmd.ProcessState == nil || !state.cmd.ProcessState.Exited()) {
+		state.lastUsed = time.Now()
+		s.markUsedLocked(key, pluginKey, "process-grpc")
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+
+	if strings.TrimSpace(cfg.Command) == "" || strings.TrimSpace(cfg.Address) == "" {
+		err := errors.New("process-grpc channel requires backend/api/backend.yaml with grpc.command and grpc.address")
+		s.mu.Lock()
+		s.markErrorLocked(key, pluginKey, "process-grpc", err)
+		s.mu.Unlock()
+		return err
+	}
+
+	cmd := exec.Command(cfg.Command, cfg.Args...)
+	cmd.Dir = filepath.Join(s.pluginsDir, pluginKey, "backend")
+	cmd.Env = os.Environ()
+	for k, v := range cfg.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	if err := cmd.Start(); err != nil {
+		s.mu.Lock()
+		s.markErrorLocked(key, pluginKey, "process-grpc", err)
+		s.mu.Unlock()
+		return err
+	}
+
+	deadline := time.Now().Add(time.Duration(cfg.StartupTimeoutMs) * time.Millisecond)
+	for {
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			err := fmt.Errorf("plugin grpc process startup timeout: %s", pluginKey)
+			s.mu.Lock()
+			s.markErrorLocked(key, pluginKey, "process-grpc", err)
+			s.markStopLocked(key, pluginKey, "process-grpc", "startup timeout")
+			s.mu.Unlock()
+			return err
+		}
+		conn, err := net.DialTimeout("tcp", cfg.Address, 300*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	s.mu.Lock()
+	now := time.Now()
+	s.processes[key] = &processState{cmd: cmd, key: key, pluginKey: pluginKey, channel: "process-grpc", idleRecycleSecond: cfg.IdleRecycleSeconds, startedAt: now, lastUsed: now}
+	s.markStartLocked(key, pluginKey, "process-grpc")
 	s.mu.Unlock()
 	return nil
 }
@@ -426,24 +670,94 @@ func (s *PluginAPIService) recycleIdleProcesses() {
 		s.mu.Lock()
 		for key, state := range s.processes {
 			if state == nil || state.cmd == nil || state.cmd.Process == nil {
+				if state != nil {
+					s.markStopLocked(key, state.pluginKey, state.channel, "invalid process state")
+				}
 				delete(s.processes, key)
 				continue
 			}
 			if state.cmd.ProcessState != nil && state.cmd.ProcessState.Exited() {
+				exitReason := "exited"
+				if code := state.cmd.ProcessState.ExitCode(); code >= 0 {
+					exitReason = fmt.Sprintf("exited(%d)", code)
+				}
+				s.markStopLocked(key, state.pluginKey, state.channel, exitReason)
 				delete(s.processes, key)
 				continue
 			}
-			idleLimit := time.Duration(state.profile.IdleRecycleSeconds) * time.Second
+			idleLimit := time.Duration(state.idleRecycleSecond) * time.Second
 			if idleLimit <= 0 {
 				continue
 			}
 			if now.Sub(state.lastUsed) > idleLimit {
 				_ = state.cmd.Process.Kill()
+				s.markStopLocked(key, state.pluginKey, state.channel, "idle recycle")
 				delete(s.processes, key)
 			}
 		}
 		s.mu.Unlock()
 	}
+}
+
+func (s *PluginAPIService) ListProcessStatuses(pluginKey string) []PluginProcessStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make([]PluginProcessStatus, 0, len(s.stats)+len(s.processes))
+	seen := map[string]bool{}
+
+	for key, item := range s.stats {
+		if item == nil {
+			continue
+		}
+		if pluginKey != "" && item.pluginKey != pluginKey {
+			continue
+		}
+		status := PluginProcessStatus{
+			Key:            key,
+			PluginKey:      item.pluginKey,
+			Channel:        item.channel,
+			RestartCount:   item.restartCount,
+			LastStartAt:    formatTime(item.lastStartAt),
+			LastUsedAt:     formatTime(item.lastUsedAt),
+			LastStopAt:     formatTime(item.lastStopAt),
+			LastExitReason: item.lastExitReason,
+			LastError:      item.lastError,
+		}
+
+		if state, ok := s.processes[key]; ok && isProcessRunning(state) {
+			status.Running = true
+			if state.cmd != nil && state.cmd.Process != nil {
+				status.PID = state.cmd.Process.Pid
+			}
+		}
+
+		seen[key] = true
+		result = append(result, status)
+	}
+
+	for key, state := range s.processes {
+		if seen[key] || state == nil {
+			continue
+		}
+		if pluginKey != "" && state.pluginKey != pluginKey {
+			continue
+		}
+		status := PluginProcessStatus{
+			Key:         key,
+			PluginKey:   state.pluginKey,
+			Channel:     state.channel,
+			Running:     isProcessRunning(state),
+			LastStartAt: formatTime(state.startedAt),
+			LastUsedAt:  formatTime(state.lastUsed),
+		}
+		if state.cmd != nil && state.cmd.Process != nil {
+			status.PID = state.cmd.Process.Pid
+		}
+		result = append(result, status)
+	}
+
+	return result
 }
 
 func normalizeHandlerName(raw string) string {

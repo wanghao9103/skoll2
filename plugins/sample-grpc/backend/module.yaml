@@ -1,0 +1,16 @@
+name: Sample GRPC 插件
+key: sample-grpc
+version: 1.0.0
+description: 独立进程 gRPC 通道示例
+icon: Connection
+apiPrefix: /plugin/sample-grpc
+frontendEntry: /plugins/sample-grpc/remoteEntry.js
+remoteModule: ./App
+permissions:
+  - sample-grpc:view
+menus:
+  - name: GRPC 通道示例
+    path: /plugins/sample-grpc
+    component: RemotePluginPage
+    icon: Connection
+    remoteModule: ./App

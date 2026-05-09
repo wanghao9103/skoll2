@@ -24,6 +24,7 @@ type PluginRecord struct {
 	ID            uint   `gorm:"primaryKey"`
 	PluginKey     string `gorm:"size:120;uniqueIndex;not null"`
 	Name          string `gorm:"size:120;not null"`
+	PluginType    string `gorm:"size:80"`
 	Version       string `gorm:"size:40;not null"`
 	Description   string `gorm:"type:text"`
 	Icon          string `gorm:"size:120"`
@@ -102,7 +103,7 @@ func (s *PluginStore) UpsertPlugin(item plugin.Item) error {
 	row := toRecord(item)
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "plugin_key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"name", "version", "description", "icon", "status", "api_prefix", "frontend_entry", "menus_json", "perms_json"}),
+		DoUpdates: clause.AssignmentColumns([]string{"name", "plugin_type", "version", "description", "icon", "status", "api_prefix", "frontend_entry", "menus_json", "perms_json"}),
 	}).Create(&row).Error
 }
 
@@ -202,6 +203,7 @@ func toRecord(item plugin.Item) PluginRecord {
 	return PluginRecord{
 		PluginKey:     item.Key,
 		Name:          item.Name,
+		PluginType:    item.Type,
 		Version:       item.Version,
 		Description:   item.Description,
 		Icon:          item.Icon,
@@ -222,6 +224,7 @@ func fromRecord(row PluginRecord) plugin.Item {
 	return plugin.Item{
 		Name:          row.Name,
 		Key:           row.PluginKey,
+		Type:          row.PluginType,
 		Version:       row.Version,
 		Description:   row.Description,
 		Icon:          row.Icon,

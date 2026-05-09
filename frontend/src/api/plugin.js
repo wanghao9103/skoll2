@@ -18,6 +18,16 @@ export function installPlugin(payload) {
   return http.post('/api/plugin/install', payload)
 }
 
+export function uploadPluginZip(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return http.post('/api/plugin/install/upload', form, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 export function upgradePlugin(payload) {
   return http.post('/api/plugin/upgrade', payload)
 }

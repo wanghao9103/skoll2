@@ -2,6 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"skoll2/backend/internal/service"
 
@@ -57,6 +60,41 @@ func (h *Handler) InstallPlugin(c *gin.Context) {
 	}
 
 	item, err := h.pluginSvc.Install(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": item})
+}
+
+func (h *Handler) InstallPluginUpload(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "file is required"})
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".zip" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "only .zip plugin package is supported"})
+		return
+	}
+
+	tmpFile, err := os.CreateTemp("", "skoll-plugin-upload-*.zip")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+	_ = tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	if err := c.SaveUploadedFile(file, tmpFile.Name()); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	item, err := h.pluginSvc.InstallFromZip(tmpFile.Name())
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
@@ -152,6 +190,12 @@ func (h *Handler) SavePluginConfig(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": gin.H{"pluginKey": req.PluginKey}})
+}
+
+func (h *Handler) PluginProcessStatuses(c *gin.Context) {
+	pluginKey := strings.TrimSpace(c.Query("pluginKey"))
+	items := h.pluginAPISvc.ListProcessStatuses(pluginKey)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "ok", "data": items})
 }
 
 func (h *Handler) Menus(c *gin.Context) {

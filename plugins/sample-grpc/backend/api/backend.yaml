@@ -1,0 +1,13 @@
+channel: process-grpc
+grpc:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+
+  command: go
+  args:
+    - run
+    - ./process-grpc
+  env: {}
+  address: 127.0.0.1:19104

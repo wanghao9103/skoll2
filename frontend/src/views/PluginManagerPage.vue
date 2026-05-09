@@ -4,12 +4,15 @@
       <el-input v-model="installForm.packageUrl" placeholder="插件包 URL，例如 plugin://sample-hello 或 https://cdn.example.com/livekit.zip" />
       <el-input v-model="installForm.checksum" placeholder="checksum，可选" />
       <el-button type="primary" @click="onInstall">安装插件</el-button>
+      <el-button type="success" @click="openZipPicker">上传 ZIP 安装</el-button>
       <el-button @click="loadData">刷新</el-button>
+      <input ref="zipInputRef" type="file" accept=".zip" style="display: none" @change="onZipFileChange" />
     </div>
 
     <el-table :data="plugins" style="width: 100%">
       <el-table-column prop="name" label="名称" min-width="140" />
       <el-table-column prop="key" label="标识" min-width="140" />
+      <el-table-column prop="type" label="类型" width="140" />
       <el-table-column prop="version" label="版本" width="120" />
       <el-table-column prop="status" label="状态" width="130" />
       <el-table-column prop="apiPrefix" label="API 前缀" min-width="160" />
@@ -74,11 +77,13 @@ import {
   getPluginList,
   installPlugin,
   savePluginConfig,
+  uploadPluginZip,
   upgradePlugin,
   uninstallPlugin
 } from '../api/plugin'
 
 const plugins = ref([])
+const zipInputRef = ref(null)
 const installForm = reactive({
   packageUrl: '',
   checksum: ''
@@ -128,6 +133,35 @@ async function onEnable(pluginKey) {
     ElMessage.success('启用成功')
     await loadData()
     notifyPluginChanged('enable', pluginKey)
+  } catch (err) {
+    ElMessage.error(err.message)
+  }
+}
+
+function openZipPicker() {
+  if (zipInputRef.value) {
+    zipInputRef.value.value = ''
+    zipInputRef.value.click()
+  }
+}
+
+async function onZipFileChange(event) {
+  const input = event?.target
+  const file = input?.files?.[0]
+  if (!file) {
+    return
+  }
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    ElMessage.warning('仅支持 .zip 插件包')
+    return
+  }
+
+  try {
+    const res = await uploadPluginZip(file)
+    const key = res?.data?.key || ''
+    ElMessage.success('上传并安装成功')
+    await loadData()
+    notifyPluginChanged('install', key)
   } catch (err) {
     ElMessage.error(err.message)
   }

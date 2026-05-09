@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$Key,
   [string]$Name,
-  [ValidateSet('js','process-http','python','go-plugin')][string]$Channel = 'js'
+  [ValidateSet('js','process-http','process-grpc','python','go-plugin')][string]$Channel = 'js'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +20,7 @@ $icon = 'Grid'
 $channelDesc = @{
   'js' = 'JS 内嵌执行通道'
   'process-http' = '独立进程 HTTP 通道'
+  'process-grpc' = '独立进程 gRPC 通道'
   'python' = 'Python 进程通道'
   'go-plugin' = 'Linux go-plugin 通道'
 }[$Channel]
@@ -116,6 +117,70 @@ func main() {
 }
 "@
     Set-Content -Encoding UTF8 -Path "$pluginRoot/backend/process-http/main.go" -Value $mainGo
+  }
+  'process-grpc' {
+    New-Item -ItemType Directory -Force -Path "$pluginRoot/backend/process-grpc" | Out-Null
+    $backendYaml = @"
+channel: process-grpc
+grpc:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+  command: go
+  args:
+    - run
+    - ./process-grpc
+  env: {}
+  address: 127.0.0.1:19112
+"@
+    $goMod = @"
+module $Key-process-grpc
+
+go 1.21
+"@
+    $mainGo = @"
+package main
+
+import (
+  "log"
+  "net"
+  "net/rpc"
+  "net/rpc/jsonrpc"
+)
+
+type req struct {
+  Handler string         `json:"handler"`
+  Method  string         `json:"method"`
+  Path    string         `json:"path"`
+  Query   map[string]any `json:"query"`
+  Params  map[string]any `json:"params"`
+  Body    map[string]any `json:"body"`
+}
+type resp struct {
+  StatusCode int    `json:"statusCode"`
+  Body       any    `json:"body"`
+  Error      string `json:"error"`
+}
+type impl struct{}
+func (impl) Handle(in *req, out *resp) error {
+  *out = resp{StatusCode: 200, Body: map[string]any{"channel": "process-grpc", "plugin": "$Key", "handler": in.Handler, "message": "pong from process-grpc"}}
+  return nil
+}
+
+func main() {
+  lis, err := net.Listen("tcp", "127.0.0.1:19112")
+  if err != nil { log.Fatal(err) }
+  if err := rpc.RegisterName("PluginGateway", impl{}); err != nil { log.Fatal(err) }
+  for {
+    conn, err := lis.Accept()
+    if err != nil { continue }
+    go rpc.ServeCodec(jsonrpc.NewServerCodec(conn))
+  }
+}
+"@
+    Set-Content -Encoding UTF8 -Path "$pluginRoot/backend/process-grpc/go.mod" -Value $goMod
+    Set-Content -Encoding UTF8 -Path "$pluginRoot/backend/process-grpc/main.go" -Value $mainGo
   }
   'python' {
     New-Item -ItemType Directory -Force -Path "$pluginRoot/backend/process-python" | Out-Null

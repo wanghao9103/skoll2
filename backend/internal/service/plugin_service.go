@@ -1,8 +1,11 @@
 package service
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +41,10 @@ type pluginModuleManifest struct {
 		Icon         string `yaml:"icon"`
 		RemoteModule string `yaml:"remoteModule"`
 	} `yaml:"menus"`
+}
+
+type pluginBackendProfile struct {
+	Channel string `yaml:"channel"`
 }
 
 type InstallPluginRequest struct {
@@ -108,6 +115,7 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 	item := plugin.Item{
 		Name:          strings.ToUpper(key),
 		Key:           key,
+		Type:          "unknown",
 		Version:       "1.0.0",
 		Description:   "Installed from " + req.PackageURL,
 		Icon:          "Puzzle",
@@ -132,6 +140,7 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 	if loaded {
 		item = mergeManifest(item, manifest)
 	}
+	item.Type = s.detectPluginType(item.Key)
 	if isPluginProtocol && !loaded {
 		return plugin.Item{}, fmt.Errorf("plugin manifest not found: %s", s.moduleManifestPath(key))
 	}
@@ -141,6 +150,50 @@ func (s *PluginService) Install(req InstallPluginRequest) (plugin.Item, error) {
 		delete(s.items, key)
 		return plugin.Item{}, err
 	}
+	return item, nil
+}
+
+func (s *PluginService) InstallFromZip(zipPath string) (plugin.Item, error) {
+	if strings.TrimSpace(zipPath) == "" {
+		return plugin.Item{}, errors.New("zip path is required")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "skoll-plugin-upload-*")
+	if err != nil {
+		return plugin.Item{}, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := unzipArchive(zipPath, tmpDir); err != nil {
+		return plugin.Item{}, err
+	}
+
+	manifestPath, manifest, err := findPluginManifest(tmpDir)
+	if err != nil {
+		return plugin.Item{}, err
+	}
+
+	key := strings.ToLower(strings.TrimSpace(manifest.Key))
+	if key == "" {
+		return plugin.Item{}, errors.New("module.yaml missing key")
+	}
+
+	pluginSrcDir := filepath.Dir(filepath.Dir(manifestPath))
+	pluginDstDir := filepath.Join(s.pluginsDir, key)
+	if _, err := os.Stat(pluginDstDir); err == nil {
+		return plugin.Item{}, errors.New("plugin already installed")
+	}
+
+	if err := copyDir(pluginSrcDir, pluginDstDir); err != nil {
+		return plugin.Item{}, err
+	}
+
+	item, err := s.Install(InstallPluginRequest{PackageURL: "plugin://" + key})
+	if err != nil {
+		_ = os.RemoveAll(pluginDstDir)
+		return plugin.Item{}, err
+	}
+
 	return item, nil
 }
 
@@ -296,6 +349,7 @@ func (s *PluginService) setState(pluginKey string, status plugin.Status) (plugin
 			item = mergeManifest(item, manifest)
 		}
 	}
+	item.Type = s.detectPluginType(pluginKey)
 
 	item.Status = status
 	s.items[pluginKey] = item
@@ -359,8 +413,170 @@ func (s *PluginService) loadFromStore() {
 			item = mergeManifest(item, manifest)
 			item.Status = status
 		}
+		item.Type = s.detectPluginType(item.Key)
 		s.items[item.Key] = item
 	}
+}
+
+func (s *PluginService) detectPluginType(pluginKey string) string {
+	path := filepath.Join(s.pluginsDir, pluginKey, "backend", "api", "backend.yaml")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "unknown"
+	}
+	profile := pluginBackendProfile{}
+	if err := yaml.Unmarshal(raw, &profile); err != nil {
+		return "unknown"
+	}
+	channel := strings.ToLower(strings.TrimSpace(profile.Channel))
+	if channel == "" {
+		return "unknown"
+	}
+	return channel
+}
+
+func findPluginManifest(root string) (string, pluginModuleManifest, error) {
+	var foundPath string
+	var found pluginModuleManifest
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if strings.ToLower(d.Name()) != "module.yaml" {
+			return nil
+		}
+		if strings.ToLower(filepath.Base(filepath.Dir(path))) != "backend" {
+			return nil
+		}
+
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		manifest := pluginModuleManifest{}
+		if err := yaml.Unmarshal(raw, &manifest); err != nil {
+			return err
+		}
+		if strings.TrimSpace(manifest.Key) == "" {
+			return nil
+		}
+
+		foundPath = path
+		found = manifest
+		return fs.SkipAll
+	})
+	if err != nil {
+		return "", pluginModuleManifest{}, err
+	}
+	if foundPath == "" {
+		return "", pluginModuleManifest{}, errors.New("module.yaml not found in uploaded zip")
+	}
+
+	return foundPath, found, nil
+}
+
+func unzipArchive(zipPath string, targetDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	cleanRoot := filepath.Clean(targetDir)
+	for _, f := range r.File {
+		name := filepath.Clean(f.Name)
+		if name == "." || strings.HasPrefix(name, "..") || filepath.IsAbs(name) {
+			return fmt.Errorf("invalid zip entry path: %s", f.Name)
+		}
+
+		dstPath := filepath.Join(cleanRoot, name)
+		if !strings.HasPrefix(filepath.Clean(dstPath), cleanRoot+string(filepath.Separator)) && filepath.Clean(dstPath) != cleanRoot {
+			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(dstPath, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+			return err
+		}
+
+		src, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		dst, err := os.Create(dstPath)
+		if err != nil {
+			_ = src.Close()
+			return err
+		}
+
+		_, copyErr := io.Copy(dst, src)
+		closeErr1 := src.Close()
+		closeErr2 := dst.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr1 != nil {
+			return closeErr1
+		}
+		if closeErr2 != nil {
+			return closeErr2
+		}
+	}
+
+	return nil
+}
+
+func copyDir(src string, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return os.MkdirAll(dst, 0o755)
+		}
+
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+
+		out, err := os.Create(target)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, in); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func inferPluginKey(packageURL string) string {

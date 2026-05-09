@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <plugin-key> [plugin-name] [channel(js|process-http|python|go-plugin)]"
+  echo "Usage: $0 <plugin-key> [plugin-name] [channel(js|process-http|process-grpc|python|go-plugin)]"
   exit 1
 fi
 
@@ -11,7 +11,7 @@ NAME="${2:-$KEY}"
 CHANNEL="${3:-js}"
 
 case "$CHANNEL" in
-  js|process-http|python|go-plugin) ;;
+  js|process-http|process-grpc|python|go-plugin) ;;
   *)
     echo "Unsupported channel: $CHANNEL"
     exit 1
@@ -113,6 +113,70 @@ func main() {
     })
   })
   _ = http.ListenAndServe(":19110", mux)
+}
+EOF
+    ;;
+  process-grpc)
+    mkdir -p "$PLUGIN_ROOT/backend/process-grpc"
+    cat > "$PLUGIN_ROOT/backend/api/backend.yaml" <<EOF
+channel: process-grpc
+grpc:
+  startupStrategy: lazy
+  startupTimeoutMs: 2000
+  requestTimeoutMs: 3000
+  idleRecycleSeconds: 180
+  command: go
+  args:
+    - run
+    - ./process-grpc
+  env: {}
+  address: 127.0.0.1:19112
+EOF
+    cat > "$PLUGIN_ROOT/backend/process-grpc/go.mod" <<EOF
+module ${KEY}-process-grpc
+
+go 1.21
+EOF
+    cat > "$PLUGIN_ROOT/backend/process-grpc/main.go" <<'EOF'
+package main
+
+import (
+  "log"
+  "net"
+  "net/rpc"
+  "net/rpc/jsonrpc"
+)
+
+type req struct {
+  Handler string         `json:"handler"`
+  Method  string         `json:"method"`
+  Path    string         `json:"path"`
+  Query   map[string]any `json:"query"`
+  Params  map[string]any `json:"params"`
+  Body    map[string]any `json:"body"`
+}
+type resp struct {
+  StatusCode int    `json:"statusCode"`
+  Body       any    `json:"body"`
+  Error      string `json:"error"`
+}
+
+type impl struct{}
+
+func (impl) Handle(in *req, out *resp) error {
+  *out = resp{StatusCode: 200, Body: map[string]any{"channel": "process-grpc", "handler": in.Handler, "message": "pong from process-grpc"}}
+  return nil
+}
+
+func main() {
+  lis, err := net.Listen("tcp", "127.0.0.1:19112")
+  if err != nil { log.Fatal(err) }
+  if err := rpc.RegisterName("PluginGateway", impl{}); err != nil { log.Fatal(err) }
+  for {
+    conn, err := lis.Accept()
+    if err != nil { continue }
+    go rpc.ServeCodec(jsonrpc.NewServerCodec(conn))
+  }
 }
 EOF
     ;;

@@ -1,0 +1,6 @@
+apiPrefix: /plugin/sample-grpc
+routes:
+  - method: GET
+    path: /ping
+    channel: process-grpc
+    handler: Ping

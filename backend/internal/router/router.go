@@ -44,7 +44,9 @@ func NewEngine(cfg config.Config, authSvc *service.AuthService, pluginSvc *servi
 			{
 				plugin.GET("/list", h.ListPlugins)
 				plugin.GET("/config", h.GetPluginConfig)
+				plugin.GET("/runtime/processes", h.PluginProcessStatuses)
 				plugin.POST("/install", h.InstallPlugin)
+				plugin.POST("/install/upload", h.InstallPluginUpload)
 				plugin.POST("/config/save", h.SavePluginConfig)
 				plugin.POST("/upgrade", h.UpgradePlugin)
 				plugin.POST("/enable", h.EnablePlugin)
